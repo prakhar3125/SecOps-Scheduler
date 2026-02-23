@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 // ════════════════════════════════════════════════════════════════════════════
 // CONSTANTS & DATA DEFINITIONS
@@ -226,9 +226,27 @@ function calcLeaveDays(memberSchedule) {
   return Object.values(memberSchedule).filter(d => d?.modifier === "Paid Leave").length;
 }
 
+// Blank schedule — all members present but all days set to Off/null.
+// Used for future months and unvisited past months so table rows render
+// but cells are empty/Off instead of random generated data.
+function generateBlankSchedule(year, month) {
+  const sched = {};
+  const days = getDaysInMonth(year, month);
+  Object.values(TEAM_CONFIG).forEach(team => {
+    team.members.forEach(member => {
+      sched[member] = {};
+      for (let d = 1; d <= days; d++) {
+        sched[member][d] = { shift: null, modifier: "Off", team: null, note: "" };
+      }
+    });
+  });
+  return sched;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // CSS STYLES
 // ════════════════════════════════════════════════════════════════════════════
+
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Exo+2:wght@300;400;600;800;900&display=swap');
@@ -513,19 +531,37 @@ select.ctrl-select{
 .cal-legend{display:flex;gap:12px;flex-wrap:wrap;}
 .legend-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted);}
 .legend-dot{width:7px;height:7px;border-radius:2px;flex-shrink:0;}
-.tbl-wrap{overflow-x:auto;}
+
+/* Add a max-height here so the table scrolls internally, enabling sticky headers to work */
+.tbl-wrap{
+  overflow:auto;
+  max-height: 65vh; /* Adjust this value if you want the table taller or shorter */
+}
 .sched-table{width:100%;border-collapse:collapse;min-width:1000px;}
+
+/* Make the top row sticky vertically */
 .sched-table th{
   padding:7px 4px;text-align:center;font-weight:500;color:var(--muted);
   border-bottom:1px solid var(--border);white-space:nowrap;
   font-family:'DM Mono',monospace;font-size:10px;
   background:var(--navy-m);
+  position:sticky;
+  top:0;
+  z-index:4; /* Needs to be high enough to float over the table rows */
 }
+
+/* The top-left corner cell needs both vertical AND horizontal stickiness, so it stays pinned in both directions */
 .sched-table th.th-member{
   text-align:left;padding-left:14px;
-  position:sticky;left:0;z-index:5;
-  min-width:190px;background:var(--navy-m);
+  position:sticky;
+  left:0;
+  top:0;
+  z-index:10; /* Highest z-index so it floats above everything else */
+  min-width:190px;
+  background:var(--navy-m);
+  border-right:1px solid var(--border); /* Optional: adds a neat line to separate the sticky column */
 }
+
 .sched-table th.today-th{color:var(--accent);}
 .sched-table td{padding:2px 3px;border-bottom:1px solid rgba(255,255,255,0.03);}
 .team-row-header td{
@@ -960,8 +996,157 @@ select.ctrl-select{
 }
 .shift-chip-wide:hover{opacity:0.7;}
 .shift-time-label{font-size:8px;opacity:0.6;margin-top:2px;display:block;text-align:center;font-family:'DM Mono',monospace;}
-`;
 
+/* ════════════════════════════════════════════════════════════════════════════
+   PRINT & PDF EXPORT STYLES
+   ════════════════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════
+   PRINT & PDF EXPORT STYLES (ULTRA COMPACT)
+   ════════════════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════
+   PRINT & PDF EXPORT STYLES (MINIMALIST & CLEAN)
+   ════════════════════════════════════════════════════════════════════════════ */
+@media print {
+  /* 1. Hide absolutely everything except the calendar container */
+  .header, .nav, .control-bar, .range-bar, .stats-row, .sec-header, .handover-alerts, .print-hide {
+    display: none !important;
+  }
+
+  /* 2. Reset page constraints to pure white paper */
+  html, body, #root, .app, .main {
+    background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* 3. Extract calendar */
+  .cal-wrap {
+    border: none !important;
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* 4. Minimalist Top Header & Legend */
+  .cal-top {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 0 0 12px 0 !important;
+    background: transparent !important;
+    border-bottom: 2px solid #000 !important;
+    margin-bottom: 12px !important;
+  }
+  
+  /* Make the title big and bold, hide the view badges */
+  .cal-top > div:first-child span:first-child {
+    font-size: 16pt !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    color: #000 !important;
+  }
+  .cal-top > div:first-child span:not(:first-child) { 
+    display: none !important; 
+  }
+
+  /* Clean up the legend */
+  .cal-legend { gap: 12px !important; margin-top: 8px !important; }
+  .legend-item { font-size: 8pt !important; color: #333 !important; }
+  .legend-dot { border-radius: 50% !important; width: 6px !important; height: 6px !important; border: 1px solid #666 !important; background: transparent !important; }
+
+  /* 5. Minimalist Table Design (Horizontal lines only) */
+  .tbl-wrap { overflow: visible !important; }
+  .sched-table { 
+    width: 100% !important; 
+    min-width: 100% !important; 
+    border-collapse: collapse !important; 
+  }
+  
+  .sched-table th, .sched-table td {
+    border: none !important;
+    border-bottom: 1px solid #eaeaea !important; /* Subtle row dividers */
+    padding: 6px 2px !important; /* Breathing room */
+    font-size: 8pt !important;
+    background: transparent !important;
+    color: #000 !important;
+    text-align: center !important;
+  }
+
+  /* Stronger line under the days header */
+  .sched-table th {
+    border-bottom: 1px solid #000 !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    padding-bottom: 8px !important;
+  }
+
+  /* Solid line dividing names from the calendar grid */
+  .sched-table th.th-member {
+    border-right: 1px solid #000 !important;
+    text-align: left !important;
+  }
+
+  /* 6. Clean Member Names */
+  .member-td {
+    padding: 0 !important;
+    border: none !important;
+    min-width: 110px !important;
+    text-align: left !important;
+  }
+  .member-name-sm { font-size: 9pt !important; font-weight: bold !important; color: #000 !important; }
+  .member-team-sm { display: none !important; } /* Hide sub-text */
+  .avatar { display: none !important; } /* Hide avatars to save space */
+
+  /* 7. Distinct Team Headers */
+  .team-row-header td {
+    background: #fcfcfc !important; /* Very faint gray */
+    color: #000 !important;
+    font-size: 8pt !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.1em !important;
+    padding: 8px 4px !important;
+    border-bottom: 1px solid #ccc !important;
+    border-top: 1px solid #ccc !important;
+  }
+
+  /* 8. Pure Typography for Shifts (No boxes or chips) */
+  .shift-chip, .shift-chip-wide {
+    width: auto !important;
+    height: auto !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    color: #000 !important;
+    font-size: 8.5pt !important;
+    font-weight: 800 !important;
+  }
+  
+  /* Hide exact times beneath chips to keep it clean */
+  .shift-time-label { display: none !important; } 
+
+  /* Clean up Date Headers (e.g. "Mon 12") */
+  .day-header-full { flex-direction: row !important; gap: 4px !important; justify-content: center !important; }
+  .day-header-month { display: none !important; } 
+  .today-th-circle .day-header-num {
+    background: transparent !important;
+    color: #000 !important;
+    border: none !important;
+    text-decoration: underline; /* Just underline today's date */
+  }
+
+  /* Force 1-page landscape fit */
+  @page {
+    size: landscape;
+    margin: 0.4cm; 
+  }
+}
+`;
 // ════════════════════════════════════════════════════════════════════════════
 // EDIT MODAL COMPONENT
 // ════════════════════════════════════════════════════════════════════════════
@@ -1078,16 +1263,14 @@ function EditModal({ cell, schedule, onSave, onClose, currentUser }) {
                           onChange={e => setCustomEnd(e.target.value)} />
                       </div>
                     </div>
-                    {candidateShift && (
-                      <div style={{fontSize:11,color:COLORS.accent,marginTop:8}}>
-                        Duration: {(() => {
-                          const s = timeToHours(customStart);
-                          let e = timeToHours(customEnd);
-                          if (e < s) e += 24;
-                          return `${(e-s).toFixed(1)}h`;
-                        })()}
-                      </div>
-                    )}
+                    <div style={{fontSize:11,color:COLORS.accent,marginTop:8}}>
+                      Duration: {(() => {
+                        const s = timeToHours(customStart);
+                        let e = timeToHours(customEnd);
+                        if (e < s) e += 24;
+                        return `${(e-s).toFixed(1)}h`;
+                      })()}
+                    </div>
                   </div>
                 )}
               </>
@@ -1290,7 +1473,7 @@ function BulkAssignDrawer({ onClose, allSchedules, setAllSchedules, addAuditLog,
       dateRange.forEach(date => {
         const y = date.getFullYear(), mo = date.getMonth(), d = date.getDate();
         const key = `${y}-${mo}`;
-        if (!newAllSchedules[key]) newAllSchedules[key] = generateSchedule(y, mo);
+        if (!newAllSchedules[key]) newAllSchedules[key] = generateBlankSchedule(y, mo);
         if (!newAllSchedules[key][member]) newAllSchedules[key][member] = {};
         newAllSchedules[key] = {
           ...newAllSchedules[key],
@@ -1852,12 +2035,14 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   // ── View Range State ──────────────────────────────────────────────────────
-  const [viewRange, setViewRange] = useState(30); // 7 | 15 | 30
+  const [viewRange, setViewRange] = useState(7); // Changed default to 7 Days
+  
   // windowStart is 1-based day index of the first visible day
   const [windowStart, setWindowStart] = useState(() => {
-    // Default: start at today if current month, else day 1
-    const t = todayActual > 0 ? Math.max(1, todayActual - 2) : 1;
-    return Math.min(t, Math.max(1, totalDays - viewRange + 1));
+    // Default: start EXACTLY at today if current month, else day 1
+    const t = todayActual > 0 ? todayActual : 1;
+    // Bound it so it doesn't overflow past the month's end
+    return Math.min(t, Math.max(1, totalDays - 7 + 1)); 
   });
 
   // Clamp windowStart whenever viewRange or totalDays changes
@@ -1868,7 +2053,8 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
   // Jump to today
   const jumpToToday = () => {
     if (todayActual < 0) { setWindowStart(1); return; }
-    const ideal = Math.max(1, todayActual - Math.floor(viewRange / 2));
+    // Make today the very first column
+    const ideal = todayActual; 
     setWindowStart(Math.min(ideal, Math.max(1, totalDays - viewRange + 1)));
   };
 
@@ -2034,6 +2220,20 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
               {viewRange === 7 ? "Week View" : viewRange === 15 ? "Fortnight View" : "Month View"}
             </span>
             {showLowCoverage && <span style={{fontSize:10,color:COLORS.mutedLight}}>⚠ Highlighted = Low Coverage days</span>}
+            
+            {/* ── NEW PDF PRINT BUTTON (Hidden during actual print) ── */}
+            <button 
+              className="print-hide" 
+              style={{
+                marginLeft: "8px", padding: "4px 10px", borderRadius: "5px", 
+                border: "none", background: COLORS.white, color: COLORS.navy, 
+                fontWeight: "bold", cursor: "pointer", fontSize: "10px"
+              }} 
+              onClick={() => window.print()}
+            >
+              🖨 Print PDF
+            </button>
+            
           </div>
           <div className="cal-legend">
             {[
@@ -2065,9 +2265,8 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
                     <th key={d}
                       className={isToday ? "today-th" : ""}
                       style={{
-                        background: showLowCoverage && lowCoverageDays.has(d)
-                          ? "rgba(122,143,166,0.07)"
-                          : isWeekend ? "rgba(255,255,255,0.01)" : undefined,
+                        /* ── FIXED: Force solid background so rows don't bleed through ── */
+                        backgroundColor: "var(--navy-m)", 
                         minWidth: isExpanded ? 72 : isMedium ? 48 : 32,
                         transition: "min-width 0.2s",
                       }}>
@@ -2201,18 +2400,15 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
     </>
   );
 }
-
 // ════════════════════════════════════════════════════════════════════════════
 // TIMELINE TAB
 // ════════════════════════════════════════════════════════════════════════════
 
 function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
-  // Use state to track the currently viewed day in the timeline
   const todayActual = currentYear === new Date().getFullYear() && currentMonth === new Date().getMonth()
     ? new Date().getDate() : 1;
   const [timelineDay, setTimelineDay] = useState(todayActual);
 
-  // Reset to the valid 'today' or the 1st if the month changes from the main header
   useEffect(() => {
     const defaultDay = currentYear === new Date().getFullYear() && currentMonth === new Date().getMonth()
       ? new Date().getDate() : 1;
@@ -2220,30 +2416,22 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
   }, [currentYear, currentMonth]);
 
   const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-
-  // Navigation handlers
   const canPrev = timelineDay > 1;
   const canNext = timelineDay < daysInMonth;
-
   const handlePrevDay = () => setTimelineDay(d => Math.max(1, d - 1));
   const handleNextDay = () => setTimelineDay(d => Math.min(daysInMonth, d + 1));
   const jumpToToday = () => setTimelineDay(todayActual);
 
-  // Determine "yesterday" logic, including month boundary logic for carry-overs
+  // Yesterday logic including month boundary
   let yesterday = null;
   let prevMonthSchedule = null;
-
   if (timelineDay > 1) {
     yesterday = timelineDay - 1;
-    prevMonthSchedule = schedule; // Yesterday is in the same month
+    prevMonthSchedule = schedule;
   } else {
-    // If we are on day 1, "yesterday" is the last day of the previous month
     let prevM = currentMonth - 1;
     let prevY = currentYear;
-    if (prevM < 0) {
-      prevM = 11;
-      prevY -= 1;
-    }
+    if (prevM < 0) { prevM = 11; prevY -= 1; }
     const prevKey = `${prevY}-${prevM}`;
     if (allSchedules && allSchedules[prevKey]) {
       yesterday = getDaysInMonth(prevY, prevM);
@@ -2255,36 +2443,30 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
   const hours = Array.from({ length: 25 }, (_, i) => i);
 
   function barStyle(startH, endH) {
-    const left = (startH / 24) * 100;
-    const width = ((endH - startH) / 24) * 100;
-    return { left: `${left}%`, width: `${width}%` };
+    return { left: `${(startH / 24) * 100}%`, width: `${((endH - startH) / 24) * 100}%` };
   }
 
   function isOvernight(shift) {
-    const s = timeToHours(shift.start);
-    const e = timeToHours(shift.end);
-    return e < s;
+    return timeToHours(shift.end) < timeToHours(shift.start);
   }
 
-  const isViewingToday = timelineDay === new Date().getDate() && 
-                         currentMonth === new Date().getMonth() && 
-                         currentYear === new Date().getFullYear();
+  const isViewingToday = timelineDay === new Date().getDate() &&
+    currentMonth === new Date().getMonth() &&
+    currentYear === new Date().getFullYear();
 
   return (
     <div className="tl-wrap">
-      {/* View Range / Navigation Header */}
-      <div className="range-bar" style={{ marginBottom: 20, border: 'none', background: 'transparent', padding: 0 }}>
+      {/* Navigation header */}
+      <div className="range-bar" style={{ marginBottom: 20, border: "none", background: "transparent", padding: 0 }}>
         <div style={{ fontFamily: "'Exo 2',sans-serif", fontWeight: 700, fontSize: 16 }}>
           24h Coverage Timeline
         </div>
-        
         <div className="week-nav" style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <button className="week-nav-btn" onClick={handlePrevDay} disabled={!canPrev} title="Previous Day">‹</button>
-          <span className="week-range-label" style={{ minWidth: 140, fontWeight: 600 }}>
-             {new Date(currentYear, currentMonth, timelineDay).toLocaleDateString("en-US", { weekday:"short", month:"short", day:"numeric", year:"numeric" })}
+          <span className="week-range-label" style={{ minWidth: 160, fontWeight: 600 }}>
+            {new Date(currentYear, currentMonth, timelineDay).toLocaleDateString("en-US", { weekday:"short", month:"short", day:"numeric", year:"numeric" })}
           </span>
           <button className="week-nav-btn" onClick={handleNextDay} disabled={!canNext} title="Next Day">›</button>
-          
           {todayActual > 0 && !isViewingToday && (
             <button className="range-today-btn" style={{ marginLeft: 8 }} onClick={jumpToToday}>↩ Today</button>
           )}
@@ -2294,7 +2476,7 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
       <div style={{ fontSize: 10, color: COLORS.muted, marginBottom: 14 }}>
         Overnight shifts from the previous day are shown faded (00:00 → end time) for handover context.
       </div>
-      
+
       <div className="tl-hours">
         {hours.map(h => (
           <div key={h} className="tl-hour">
@@ -2302,7 +2484,7 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
           </div>
         ))}
       </div>
-      
+
       {Object.entries(TEAM_CONFIG).map(([teamKey, team]) => {
         const active = team.members.filter(m => {
           const d = schedule[m]?.[timelineDay];
@@ -2310,21 +2492,17 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
         });
 
         const sortedMembers = [...team.members].sort((a, b) => {
-          const getStartScore = (member) => {
+          const getScore = (member) => {
             const td = schedule[member]?.[timelineDay];
             const yd = yesterday && prevMonthSchedule ? prevMonthSchedule[member]?.[yesterday] : null;
-            const isActive = td?.shift && !["Off", "Paid Leave"].includes(td.modifier);
-            const hasCarry = yd?.shift && !["Off", "Paid Leave"].includes(yd.modifier) && isOvernight(yd.shift);
-
+            const isActive = td?.shift && !["Off","Paid Leave"].includes(td.modifier);
+            const hasCarry = yd?.shift && !["Off","Paid Leave"].includes(yd.modifier) && isOvernight(yd.shift);
             if (isActive) return timeToHours(td.shift.start);
             if (hasCarry) return 0;
             return 999;
           };
-
-          const scoreA = getStartScore(a);
-          const scoreB = getStartScore(b);
-          if (scoreA !== scoreB) return scoreA - scoreB;
-          return a.localeCompare(b);
+          const sa = getScore(a), sb = getScore(b);
+          return sa !== sb ? sa - sb : a.localeCompare(b);
         });
 
         return (
@@ -2354,17 +2532,16 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
             {sortedMembers.map(member => {
               const todayData = schedule[member]?.[timelineDay];
               const yestData = yesterday && prevMonthSchedule ? prevMonthSchedule[member]?.[yesterday] : null;
-
               const rows = [];
 
-              if (yestData?.shift && !["Off", "Paid Leave"].includes(yestData.modifier) && isOvernight(yestData.shift)) {
+              // Yesterday's overnight carry-over
+              if (yestData?.shift && !["Off","Paid Leave"].includes(yestData.modifier) && isOvernight(yestData.shift)) {
                 const shift = yestData.shift;
                 const endH = timeToHours(shift.end);
                 const colorKey = getShiftColorKey(teamKey, shift.id, shift.isCustom);
                 const sc = SHIFT_COLORS[colorKey];
                 const barCol = yestData.modifier === "WFH" ? COLORS.statusWFH
-                  : yestData.modifier === "Weekend Scheduled" ? COLORS.statusWeekend
-                    : sc.text;
+                  : yestData.modifier === "Weekend Scheduled" ? COLORS.statusWeekend : sc.text;
                 rows.push(
                   <div key={`${member}-yest`} className="tl-row">
                     <div className="tl-label" title={`${member} (from prev day)`} style={{ opacity: 0.55 }}>
@@ -2373,32 +2550,25 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
                     <div className="tl-bar-wrap">
                       <div className="tl-bar" style={{
                         ...barStyle(0, endH),
-                        background: barCol + "18",
-                        borderLeftColor: barCol + "60",
-                        color: barCol + "99",
-                        borderStyle: "dashed",
-                        fontStyle: "italic",
-                      }}>
-                        {shift.id} carry-over → {shift.end}
-                      </div>
+                        background: barCol + "18", borderLeftColor: barCol + "60",
+                        color: barCol + "99", borderStyle: "dashed", fontStyle: "italic",
+                      }}>{shift.id} carry-over → {shift.end}</div>
                       {isViewingToday && <div className="tl-now" style={{ left: `${(nowH / 24) * 100}%` }} />}
                     </div>
                   </div>
                 );
               }
 
-              if (todayData?.shift && !["Off", "Paid Leave"].includes(todayData.modifier)) {
+              // Today's shift
+              if (todayData?.shift && !["Off","Paid Leave"].includes(todayData.modifier)) {
                 const shift = todayData.shift;
                 const startH = timeToHours(shift.start);
-                const endH = timeToHours(shift.end);
-
                 const overnight = isOvernight(shift);
-                const displayEnd = overnight ? 24 : endH;
+                const displayEnd = overnight ? 24 : timeToHours(shift.end);
                 const colorKey = getShiftColorKey(teamKey, shift.id, shift.isCustom);
                 const sc = SHIFT_COLORS[colorKey];
                 const barCol = todayData.modifier === "WFH" ? COLORS.statusWFH
-                  : todayData.modifier === "Weekend Scheduled" ? COLORS.statusWeekend
-                    : sc.text;
+                  : todayData.modifier === "Weekend Scheduled" ? COLORS.statusWeekend : sc.text;
                 rows.push(
                   <div key={`${member}-today`} className="tl-row">
                     <div className="tl-label" title={member}>
@@ -2407,13 +2577,9 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
                     <div className="tl-bar-wrap">
                       <div className="tl-bar" style={{
                         ...barStyle(startH, displayEnd),
-                        background: barCol + "28",
-                        borderLeftColor: barCol,
-                        color: barCol,
+                        background: barCol + "28", borderLeftColor: barCol, color: barCol,
                       }}>
-                        {shift.label || shift.id}
-                        {overnight ? " →" : ""}
-                        {todayData.modifier === "WFH" ? " (WFH)" : ""}
+                        {shift.label || shift.id}{overnight ? " →" : ""}{todayData.modifier === "WFH" ? " (WFH)" : ""}
                       </div>
                       {isViewingToday && <div className="tl-now" style={{ left: `${(nowH / 24) * 100}%` }} />}
                     </div>
@@ -2421,19 +2587,21 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
                 );
               }
 
-              return rows.length > 0 ? <>{rows}</> : null;
+              return rows.length > 0 ? <React.Fragment key={member}>{rows}</React.Fragment> : null;
             })}
           </div>
         );
       })}
+
       <div style={{ marginTop: 16, fontSize: 10, color: COLORS.muted, display: "flex", gap: 16, flexWrap: "wrap" }}>
         {isViewingToday && <span style={{ color: COLORS.accent }}>│ Current time</span>}
-        <span style={{ color: COLORS.muted }}>⋯ Handover windows</span>
-        <span style={{ color: COLORS.muted, fontStyle: "italic" }}>↩ dashed = overnight carry-over from prev day</span>
+        <span>⋯ Handover windows</span>
+        <span style={{ fontStyle: "italic" }}>↩ dashed = overnight carry-over from prev day</span>
       </div>
     </div>
   );
 }
+
 // ════════════════════════════════════════════════════════════════════════════
 // METRICS TAB
 // ════════════════════════════════════════════════════════════════════════════
@@ -2785,21 +2953,33 @@ export default function App() {
 
   const scheduleKey = `${currentYear}-${currentMonth}`;
 
-  const schedule = useMemo(() => {
-    if (allSchedules[scheduleKey]) return allSchedules[scheduleKey];
-    return generateSchedule(currentYear, currentMonth);
-  }, [allSchedules, scheduleKey, currentYear, currentMonth]);
+  // Check if the viewed month is the real current month (for seeding demo data)
+  const realNow = new Date();
+  const isCurrentRealMonth = currentYear === realNow.getFullYear() && currentMonth === realNow.getMonth();
+  const isFutureMonth = new Date(currentYear, currentMonth, 1) > new Date(realNow.getFullYear(), realNow.getMonth(), 1);
 
+  const schedule = useMemo(() => {
+    // 1. If we have saved data for this month, always use it
+    if (allSchedules[scheduleKey]) return allSchedules[scheduleKey];
+    // 2. Current real month with no saved data → seed with generated demo data
+    if (isCurrentRealMonth) return generateSchedule(currentYear, currentMonth);
+    // 3. Past or future months with no saved data → blank slate
+    return generateBlankSchedule(currentYear, currentMonth);
+  }, [allSchedules, scheduleKey, currentYear, currentMonth, isCurrentRealMonth]);
+
+  // Only seed the current real month on first load — never auto-populate other months
   const ensureScheduleExists = useCallback(() => {
-    if (!allSchedules[scheduleKey]) {
+    if (!allSchedules[scheduleKey] && isCurrentRealMonth) {
       const gen = generateSchedule(currentYear, currentMonth);
       setAllSchedules(prev => {
-        const next = {...prev, [scheduleKey]: gen};
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        const next = { ...prev, [scheduleKey]: gen };
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
         return next;
       });
     }
-  }, [allSchedules, scheduleKey, currentYear, currentMonth]);
+    // For all other months (past/future): do NOT auto-generate.
+    // They will display as blank until the user explicitly edits a cell.
+  }, [allSchedules, scheduleKey, currentYear, currentMonth, isCurrentRealMonth]);
 
   useEffect(() => { ensureScheduleExists(); }, [currentYear, currentMonth]);
 
@@ -2819,7 +2999,8 @@ export default function App() {
 
   const handleSaveCell = useCallback((member, day, newData, reason) => {
     setAllSchedules(prev => {
-      const existing = prev[scheduleKey] || generateSchedule(currentYear, currentMonth);
+      // Use saved data if it exists, blank schedule if not (never random-generate on edit)
+      const existing = prev[scheduleKey] || generateBlankSchedule(currentYear, currentMonth);
       const next = {
         ...prev,
         [scheduleKey]: {
@@ -2878,7 +3059,23 @@ export default function App() {
           </div>
           <div className="header-center">
             <button className="month-nav-btn" onClick={prevMonth}>‹</button>
-            <div className="month-label">{getMonthName(currentYear, currentMonth)}</div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+              <div className="month-label">{getMonthName(currentYear, currentMonth)}</div>
+              <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                {isCurrentRealMonth ? (
+                  <span style={{fontSize:9,letterSpacing:"0.1em",padding:"1px 7px",borderRadius:10,background:"rgba(74,122,90,0.2)",color:"#4A7A5A",border:"1px solid rgba(74,122,90,0.3)",fontWeight:700}}>CURRENT</span>
+                ) : isFutureMonth ? (
+                  <span style={{fontSize:9,letterSpacing:"0.1em",padding:"1px 7px",borderRadius:10,background:"rgba(122,143,166,0.15)",color:"#7A9BBB",border:"1px solid rgba(122,143,166,0.3)",fontWeight:700}}>FUTURE</span>
+                ) : (
+                  <span style={{fontSize:9,letterSpacing:"0.1em",padding:"1px 7px",borderRadius:10,background:"rgba(80,90,104,0.25)",color:"#68788A",border:"1px solid rgba(80,90,104,0.35)",fontWeight:700}}>PAST</span>
+                )}
+                {allSchedules[scheduleKey] ? (
+                  <span style={{fontSize:9,color:"#4A7A5A",letterSpacing:"0.06em"}}>● saved</span>
+                ) : (
+                  <span style={{fontSize:9,color:COLORS.muted,letterSpacing:"0.06em"}}>○ blank</span>
+                )}
+              </div>
+            </div>
             <button className="month-nav-btn" onClick={nextMonth}>›</button>
           </div>
           <div className="header-right">
@@ -2917,9 +3114,53 @@ export default function App() {
         </nav>
 
         <main className="main">
+          {/* ── Month context banner — shown for non-current months ── */}
+          {!isCurrentRealMonth && tab !== "audit" && (
+            <div style={{
+              display:"flex",alignItems:"center",gap:12,
+              padding:"10px 16px",marginBottom:18,borderRadius:8,
+              background: isFutureMonth ? "rgba(122,143,166,0.07)" : "rgba(80,90,104,0.12)",
+              border: `1px solid ${isFutureMonth ? "rgba(122,143,166,0.2)" : "rgba(80,90,104,0.25)"}`,
+            }}>
+              <span style={{fontSize:15}}>{isFutureMonth ? "📅" : "🗂"}</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:isFutureMonth ? "#7A9BBB" : COLORS.mutedLight,letterSpacing:"0.04em"}}>
+                  {isFutureMonth ? `Future Month — ${getMonthName(currentYear, currentMonth)}` : `Past Month — ${getMonthName(currentYear, currentMonth)}`}
+                </div>
+                <div style={{fontSize:10,color:COLORS.muted,marginTop:2}}>
+                  {allSchedules[scheduleKey]
+                    ? "Saved roster loaded. Edit any cell to update."
+                    : isFutureMonth
+                      ? "No roster set yet. Click any cell in the Calendar tab to start building this month's schedule."
+                      : "No roster was saved for this month. Cells are blank — you can still add data retroactively."
+                  }
+                </div>
+              </div>
+              {!allSchedules[scheduleKey] && currentUser.role !== ROLES.MEMBER && (
+                <button
+                  style={{
+                    marginLeft:"auto",padding:"6px 14px",borderRadius:6,
+                    border:"1px solid rgba(122,143,166,0.3)",background:"rgba(122,143,166,0.1)",
+                    color:COLORS.accent,fontFamily:"'DM Mono',monospace",fontSize:11,cursor:"pointer",
+                    whiteSpace:"nowrap",flexShrink:0,
+                  }}
+                  onClick={() => {
+                    // Initialize this month as a blank schedule so it's "saved" and editable
+                    const blank = generateBlankSchedule(currentYear, currentMonth);
+                    setAllSchedules(prev => {
+                      const next = { ...prev, [scheduleKey]: blank };
+                      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+                      return next;
+                    });
+                  }}
+                >+ Initialize Roster</button>
+              )}
+            </div>
+          )}
           {tab === "overview" && <OverviewTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} currentUser={currentUser} />}
           {tab === "calendar" && <CalendarTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} onEditCell={setEditCell} currentUser={currentUser} />}
-{tab === "timeline" && <TimelineTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} allSchedules={allSchedules} />}          {tab === "metrics" && <MetricsTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} />}
+          {tab === "timeline" && <TimelineTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} allSchedules={allSchedules} />}
+          {tab === "metrics" && <MetricsTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} />}
           {tab === "admin" && currentUser.role !== ROLES.MEMBER && <AdminTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} addAuditLog={addAuditLog} currentUser={currentUser} />}
           {tab === "audit" && <AuditTab auditLogs={auditLogs} />}
         </main>
