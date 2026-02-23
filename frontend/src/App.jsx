@@ -74,9 +74,9 @@ const TEAM_CONFIG = {
     bgAlpha: "rgba(122,143,166,0.08)",
     members: [
       "Harmanpreet Singh",
-      "Aditya Bharti","Arpan Thomas","Bhavit Gupta","Harshit Singh",
-      "Kartikey Kishore","Mithun Chakraborty","Pranay Kumawat","Ritul Resuun",
-      "Samridhi Thakral","Sanskar Tiwari","Sarthak Jain","Veeraj Kute"
+      "Adity Bharti","Arpan Thomas","Bhakti Gupta","Harshit Singh",
+      "Kartikey Kishore","Mithun Chakraborty","Pranay Kumawat","Ritul Reenum",
+      "Samriddhi Thakral","Sanskar Tiwari","Sarthak Jain","Veeraj Kute"
     ],
     standardShifts: [
       { id:"A", label:"Shift A (5AM–2PM)",  start:"05:00", end:"14:00", startH:5,  endH:14 },
@@ -115,7 +115,7 @@ const TEAM_CONFIG = {
     bgAlpha: "rgba(122,143,166,0.08)",
     members: [
       "Manveer Goura",
-      "Anushka Bajpyee","Aditya Goyal","Prakhar Sinha"
+      "Anushka Bajpai","Aditya Goyal","Prakhar Sinha"
     ],
     standardShifts: [
       { id:"F", label:"Fixed (11:30AM–8:30PM)", start:"11:30", end:"20:30", startH:11.5, endH:20.5 },
@@ -124,7 +124,6 @@ const TEAM_CONFIG = {
     handoverWindows: []
   }
 };
-
 // Set of all lead names for quick lookup
 const LEAD_NAMES = new Set(Object.values(TEAM_CONFIG).map(t => t.lead));
 
@@ -144,7 +143,7 @@ const USERS = [
   { id:"harman", name:"Harmanpreet Singh", role: ROLES.LEAD, team:"CSIRT", password:"lead123" },
   { id:"saurav", name:"Saurav Singh", role: ROLES.LEAD, team:"ThreatMgmt", password:"lead123" },
   { id:"manveer", name:"Manveer Goura", role: ROLES.LEAD, team:"SecProjects", password:"lead123" },
-  { id:"member", name:"Aditya Bharti", role: ROLES.MEMBER, team:"CSIRT", password:"member123" },
+  { id:"member", name:"Adity Bharti", role: ROLES.MEMBER, team:"CSIRT", password:"member123" },
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2027,6 +2026,13 @@ function OverviewTab({ schedule, currentYear, currentMonth, currentUser }) {
 // CALENDAR TAB
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// CALENDAR TAB
+// ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// CALENDAR TAB
+// ════════════════════════════════════════════════════════════════════════════
+
 function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentUser, activeFilters, setActiveFilters }) {
   const totalDays = getDaysInMonth(currentYear, currentMonth);
   const todayActual = currentYear === new Date().getFullYear() && currentMonth === new Date().getMonth()
@@ -2035,25 +2041,19 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   // ── View Range State ──────────────────────────────────────────────────────
-  const [viewRange, setViewRange] = useState(7); // Changed default to 7 Days
+  const [viewRange, setViewRange] = useState(7); 
   
-  // windowStart is 1-based day index of the first visible day
   const [windowStart, setWindowStart] = useState(() => {
-    // Default: start EXACTLY at today if current month, else day 1
     const t = todayActual > 0 ? todayActual : 1;
-    // Bound it so it doesn't overflow past the month's end
     return Math.min(t, Math.max(1, totalDays - 7 + 1)); 
   });
 
-  // Clamp windowStart whenever viewRange or totalDays changes
   useEffect(() => {
     setWindowStart(ws => Math.max(1, Math.min(ws, Math.max(1, totalDays - viewRange + 1))));
   }, [viewRange, totalDays]);
 
-  // Jump to today
   const jumpToToday = () => {
     if (todayActual < 0) { setWindowStart(1); return; }
-    // Make today the very first column
     const ideal = todayActual; 
     setWindowStart(Math.min(ideal, Math.max(1, totalDays - viewRange + 1)));
   };
@@ -2070,10 +2070,11 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
     });
   };
 
-  // ── Filter State ──────────────────────────────────────────────────────────
+  // ── Filter & Focus State ──────────────────────────────────────────────────
   const [teamFilter, setTeamFilter] = useState("all");
   const [modFilter, setModFilter] = useState("all");
   const [showLowCoverage, setShowLowCoverage] = useState(false);
+  const [focusUser, setFocusUser] = useState("all"); // NEW: State for Single User View
 
   // Build the visible day headers for the current window
   const dayHeaders = useMemo(() => {
@@ -2084,7 +2085,6 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
     });
   }, [windowStart, windowEnd, currentYear, currentMonth]);
 
-  // Wider chips for fewer days
   const isExpanded = viewRange <= 7;
   const isMedium = viewRange === 15;
 
@@ -2109,7 +2109,6 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
     return dayData.shift?.id || "·";
   }
 
-  // Low coverage day detection
   const lowCoverageDays = useMemo(() => {
     const low = new Set();
     for (let d = windowStart; d <= windowEnd; d++) {
@@ -2134,6 +2133,9 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
       const hasModifier = Object.values(schedule[member] || {}).some(d => d?.modifier === modFilter);
       if (!hasModifier) return false;
     }
+    // NEW: If a specific user is focused, hide everyone else
+    if (focusUser !== "all" && member !== focusUser) return false;
+    
     return true;
   }
 
@@ -2141,12 +2143,25 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
     currentUser.role === ROLES.ADMIN ||
     (currentUser.role === ROLES.LEAD && currentUser.team === teamKey);
 
-  // Window label string
   const windowLabel = (() => {
     const s = `${monthNames[currentMonth]} ${windowStart}`;
     const e = `${monthNames[currentMonth]} ${windowEnd}`;
     return `${s} – ${e}`;
   })();
+
+  // NEW: Gather all visible members for the dropdown
+  const availableMembersForFocus = useMemo(() => {
+    const list = [];
+    filteredTeams.forEach(([tk, team]) => {
+      team.members.forEach(m => {
+        // Base visibility check before focus is applied
+        if (currentUser.role === ROLES.MEMBER && m !== currentUser.name) return;
+        if (currentUser.role === ROLES.LEAD && currentUser.team !== tk) return;
+        list.push(m);
+      });
+    });
+    return list.sort();
+  }, [filteredTeams, currentUser]);
 
   return (
     <>
@@ -2156,14 +2171,25 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
         {[["all","All"],["CSIRT","CSIRT"],["ThreatMgmt","Threat"],["SecProjects","Projects"]].map(([val,label]) => (
           <button key={val}
             className={`ctrl-btn ${teamFilter === val ? (val==="all"?"active-all":val==="CSIRT"?"active-cyan":val==="ThreatMgmt"?"active-blue":"active-coral") : ""}`}
-            onClick={() => setTeamFilter(val)}>{label}</button>
+            onClick={() => { setTeamFilter(val); setFocusUser("all"); }}>{label}</button>
         ))}
+        
         <div className="ctrl-sep"/>
-        <span className="control-label">Status:</span>
-        {["all","On-Site","WFH","Paid Leave","Weekend Scheduled"].map(m => (
-          <button key={m} className={`ctrl-btn ${modFilter === m ? "active-cyan" : ""}`}
-            onClick={() => setModFilter(m)}>{m === "all" ? "All" : m}</button>
-        ))}
+        
+        {/* ── NEW: Single User Focus Dropdown ── */}
+        <span className="control-label">Spotlight:</span>
+        <select 
+          className="ctrl-select" 
+          value={focusUser} 
+          onChange={(e) => setFocusUser(e.target.value)}
+          style={{ width: "160px", color: focusUser !== "all" ? COLORS.accent : COLORS.offWhite, borderColor: focusUser !== "all" ? COLORS.accent : "var(--border)" }}
+        >
+          <option value="all">Everyone</option>
+          {availableMembersForFocus.map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        
         <div className="ctrl-sep"/>
         <button className={`ctrl-btn ${showLowCoverage ? "active-warn" : ""}`} onClick={() => setShowLowCoverage(v=>!v)}>📉 Low Coverage</button>
       </div>
@@ -2209,7 +2235,7 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
         <div className="cal-top">
           <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
             <span style={{fontFamily:"'Exo 2',sans-serif",fontWeight:700,fontSize:14}}>
-              {getMonthName(currentYear, currentMonth)} — Shift Calendar
+              {focusUser !== "all" ? `${focusUser.split(' ')[0]}'s Schedule` : `${getMonthName(currentYear, currentMonth)} — Shift Calendar`}
             </span>
             <span style={{
               fontSize:11,color:COLORS.accent,
@@ -2219,9 +2245,9 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
             }}>
               {viewRange === 7 ? "Week View" : viewRange === 15 ? "Fortnight View" : "Month View"}
             </span>
-            {showLowCoverage && <span style={{fontSize:10,color:COLORS.mutedLight}}>⚠ Highlighted = Low Coverage days</span>}
+            {showLowCoverage && focusUser === "all" && <span style={{fontSize:10,color:COLORS.mutedLight}}>⚠ Highlighted = Low Coverage days</span>}
             
-            {/* ── NEW PDF PRINT BUTTON (Hidden during actual print) ── */}
+            {/* ── PDF PRINT BUTTON ── */}
             <button 
               className="print-hide" 
               style={{
@@ -2231,7 +2257,7 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
               }} 
               onClick={() => window.print()}
             >
-              🖨 Print PDF
+              🖨 Print
             </button>
             
           </div>
@@ -2265,7 +2291,6 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
                     <th key={d}
                       className={isToday ? "today-th" : ""}
                       style={{
-                        /* ── FIXED: Force solid background so rows don't bleed through ── */
                         backgroundColor: "var(--navy-m)", 
                         minWidth: isExpanded ? 72 : isMedium ? 48 : 32,
                         transition: "min-width 0.2s",
@@ -2307,17 +2332,20 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
                 const visibleMembers = team.members.filter(m => shouldShowMember(m, teamKey));
                 if (visibleMembers.length === 0) return null;
                 return (
-                  <>
-                    <tr key={`hdr-${teamKey}`} className="team-row-header">
-                      <td colSpan={dayHeaders.length + 1} style={{
-                        background:"rgba(122,143,166,0.06)",
-                        borderLeft:"3px solid rgba(122,143,166,0.4)",
-                        color: COLORS.accent,
-                      }}>
-                        ◈ {team.label} &nbsp;·&nbsp; Lead: {team.lead}
-                        &nbsp;·&nbsp; {visibleMembers.length} member{visibleMembers.length !== 1 ? "s" : ""}
-                      </td>
-                    </tr>
+                  <React.Fragment key={`frag-${teamKey}`}>
+                    {/* Hide team headers if we are focused on a single person to save space */}
+                    {focusUser === "all" && (
+                      <tr key={`hdr-${teamKey}`} className="team-row-header">
+                        <td colSpan={dayHeaders.length + 1} style={{
+                          background:"rgba(122,143,166,0.06)",
+                          borderLeft:"3px solid rgba(122,143,166,0.4)",
+                          color: COLORS.accent,
+                        }}>
+                          ◈ {team.label} &nbsp;·&nbsp; Lead: {team.lead}
+                          &nbsp;·&nbsp; {visibleMembers.length} member{visibleMembers.length !== 1 ? "s" : ""}
+                        </td>
+                      </tr>
+                    )}
                     {visibleMembers.map((member) => (
                       <tr key={member}>
                         <td>
@@ -2338,18 +2366,19 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
                           const {bg, color} = getChipStyle(dayData, teamKey);
                           const lbl = getChipLabel(dayData, isExpanded);
                           const isToday = d === todayActual;
+                          // If focus is active, don't color low coverage to avoid distraction
+                          const applyLowCoverage = showLowCoverage && focusUser === "all" && lowCoverageDays.has(d);
 
                           return (
                             <td key={d}
                               className={`shift-td ${isToday ? "today-td" : ""} ${isWeekend ? "weekend-td" : ""}`}
                               style={{
-                                background: showLowCoverage && lowCoverageDays.has(d) ? "rgba(122,143,166,0.04)" : undefined,
+                                background: applyLowCoverage ? "rgba(122,143,166,0.04)" : undefined,
                                 cursor: canEdit(teamKey) ? "pointer" : "default",
                               }}
                               onClick={() => canEdit(teamKey) && onEditCell({ member, day: d, year: currentYear, month: currentMonth, teamKey })}
                             >
                               {isExpanded ? (
-                                /* Wide card cell for 7-day view */
                                 <div style={{
                                   display:"flex",flexDirection:"column",alignItems:"center",
                                   padding:"4px 2px",gap:2
@@ -2376,7 +2405,6 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
                                   )}
                                 </div>
                               ) : (
-                                /* Compact chip for 15/30-day view */
                                 <span
                                   className="shift-chip"
                                   style={{background:bg, color}}
@@ -2390,7 +2418,7 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
                         })}
                       </tr>
                     ))}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -2601,9 +2629,8 @@ function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
     </div>
   );
 }
-
 // ════════════════════════════════════════════════════════════════════════════
-// METRICS TAB
+// METRICS TAB (FULL ANALYTICS SUITE)
 // ════════════════════════════════════════════════════════════════════════════
 
 function MetricsTab({ schedule, currentYear, currentMonth }) {
@@ -2611,15 +2638,91 @@ function MetricsTab({ schedule, currentYear, currentMonth }) {
   const [sortField, setSortField] = useState("hours");
   const [sortDir, setSortDir] = useState("desc");
 
+  // 1. Calculate deep stats for every member
   const memberStats = useMemo(() => {
     return Object.entries(TEAM_CONFIG).flatMap(([tk, team]) =>
       team.members.map(member => {
         const ms = schedule[member] || {};
-        const hours = calcMemberHours(ms);
-        const nights = calcNightShifts(ms);
-        const weekends = calcWeekends(ms, currentYear, currentMonth);
-        const leaves = calcLeaveDays(ms);
-        return { name: member, team: tk, hours: Math.round(hours*10)/10, nights, weekends, leaves };
+        
+        let hours = 0;
+        let nights = 0, shiftA = 0, shiftB = 0, shiftCustom = 0;
+        let weekends = 0;
+        let leaves = 0;
+        let wfh = 0;
+        let onSite = 0;
+        
+        let maxConsecutive = 0;
+        let currentStreak = 0;
+        
+        // Track which specific weeks they worked a weekend for "Weekend Burden"
+        let weekendWeeks = new Set();
+
+        for (let d = 1; d <= days; d++) {
+          const dayData = ms[d];
+          const dow = getDayOfWeek(currentYear, currentMonth, d);
+          const isWeekend = dow === 0 || dow === 6;
+
+          if (!dayData || dayData.modifier === "Off") {
+            currentStreak = 0; // Reset streak on day off
+            continue;
+          }
+
+          if (dayData.modifier === "Paid Leave") {
+            leaves++;
+            currentStreak = 0; // Reset streak on leave
+            continue;
+          }
+
+          // If we reach here, they are working (On-Site, WFH, or Weekend Scheduled)
+          currentStreak++;
+          if (currentStreak > maxConsecutive) maxConsecutive = currentStreak;
+
+          if (dayData.modifier === "WFH") wfh++;
+          if (dayData.modifier === "On-Site" || dayData.modifier === "Weekend Scheduled") onSite++;
+
+          if (isWeekend) {
+            weekends++;
+            // Calculate week number in the month (0 to 5)
+            const weekNum = Math.floor((d - 1 + new Date(currentYear, currentMonth, 1).getDay()) / 7);
+            weekendWeeks.add(weekNum);
+          }
+
+          if (dayData.shift) {
+            const start = timeToHours(dayData.shift.start);
+            let end = timeToHours(dayData.shift.end);
+            if (end < start) end += 24;
+            hours += (end - start);
+
+            // Shift Type Distribution
+            if (dayData.shift.id === "A") shiftA++;
+            else if (dayData.shift.id === "B") shiftB++;
+            else if (dayData.shift.id === "C") nights++;
+            else shiftCustom++;
+          }
+        }
+
+        // Calculate consecutive weekends
+        let maxConsWknds = 0;
+        let currConsWknds = 0;
+        for (let w = 0; w <= 5; w++) {
+          if (weekendWeeks.has(w)) {
+            currConsWknds++;
+            if (currConsWknds > maxConsWknds) maxConsWknds = currConsWknds;
+          } else {
+            currConsWknds = 0;
+          }
+        }
+
+        const totalWorkedDays = wfh + onSite;
+        const wfhPercent = totalWorkedDays > 0 ? Math.round((wfh / totalWorkedDays) * 100) : 0;
+
+        return { 
+          name: member, team: tk, 
+          hours: Math.round(hours*10)/10, 
+          nights, shiftA, shiftB, shiftCustom,
+          weekends, maxConsWknds, 
+          leaves, wfhPercent, maxConsecutive 
+        };
       })
     );
   }, [schedule, currentYear, currentMonth, days]);
@@ -2636,7 +2739,9 @@ function MetricsTab({ schedule, currentYear, currentMonth }) {
 
   const sortIcon = (field) => sortField === field ? (sortDir === "desc" ? "↓" : "↑") : "↕";
 
-  // Coverage gap analysis
+  // Global Totals
+  const totalLeaves = memberStats.reduce((sum, m) => sum + m.leaves, 0);
+  
   const coverageGaps = useMemo(() => {
     let gaps = 0;
     for (let d = 1; d <= days; d++) {
@@ -2651,53 +2756,115 @@ function MetricsTab({ schedule, currentYear, currentMonth }) {
     return gaps;
   }, [schedule, days]);
 
-  const wfhRatio = useMemo(() => {
-    let total=0, wfh=0;
-    Object.values(schedule).forEach(ms => Object.values(ms).forEach(d => { total++; if(d?.modifier==="WFH") wfh++; }));
-    return total > 0 ? Math.round((wfh/total)*100) : 0;
-  }, [schedule]);
+  const orgWfhRatio = useMemo(() => {
+    let wfhCount = 0, totalCount = 0;
+    memberStats.forEach(m => { 
+       const totalDays = Math.round(m.hours / 8); // approximate
+       wfhCount += Math.round((m.wfhPercent / 100) * totalDays);
+       totalCount += totalDays;
+    });
+    return totalCount > 0 ? Math.round((wfhCount / totalCount) * 100) : 0;
+  }, [memberStats]);
+
+  const burnoutRisks = memberStats.filter(m => m.maxConsecutive > 6);
+  const weekendRisks = memberStats.filter(m => m.maxConsWknds >= 2);
 
   return (
     <>
       <div className="stats-row" style={{marginBottom:24}}>
         <div className="stat-card c-coral">
+          <div className="stat-glyph">⚠</div>
           <div className="stat-label">Coverage Gaps</div>
           <div className="stat-value" style={{color:coverageGaps>10?COLORS.danger:COLORS.accent}}>{coverageGaps}</div>
           <div className="stat-sub">Days below min staffing</div>
         </div>
         <div className="stat-card c-cyan">
-          <div className="stat-label">WFH Ratio</div>
-          <div className="stat-value" style={{color:COLORS.accent}}>{wfhRatio}%</div>
-          <div className="stat-sub">Remote this month</div>
+          <div className="stat-glyph">🏠</div>
+          <div className="stat-label">Org WFH Ratio</div>
+          <div className="stat-value" style={{color:COLORS.accent}}>{orgWfhRatio}%</div>
+          <div className="stat-sub">Overall remote equity</div>
+        </div>
+        <div className="stat-card c-warn">
+          <div className="stat-glyph">🏖</div>
+          <div className="stat-label">Leave Liability</div>
+          <div className="stat-value" style={{color: totalLeaves > 30 ? COLORS.danger : COLORS.statusLeave}}>
+            {totalLeaves} <span style={{fontSize:14,color:COLORS.muted}}>/ 30 MAX</span>
+          </div>
+          <div className="stat-sub">Total team paid leave days</div>
+        </div>
+        <div className="stat-card c-warn">
+          <div className="stat-glyph">🔥</div>
+          <div className="stat-label">Burnout Risks</div>
+          <div className="stat-value" style={{color: burnoutRisks.length > 0 ? COLORS.danger : COLORS.success}}>
+            {burnoutRisks.length}
+          </div>
+          <div className="stat-sub">Working 7+ days straight</div>
         </div>
       </div>
 
       <div className="metrics-grid">
-        {/* Member Stats Table */}
-        <div className="metric-card" style={{gridColumn:"1 / -1"}}>
-          <div className="metric-title">📊 Member Utilization — {getMonthName(currentYear, currentMonth)}</div>
+        {/* 1. Deep Member Analytics Table */}
+        <div className="metric-card" style={{gridColumn:"1 / -1", padding: "14px 18px"}}>
+          <div className="metric-title">📊 Advanced Member Analytics — {getMonthName(currentYear, currentMonth)}</div>
           <div style={{overflowX:"auto"}}>
             <table className="table-mini" style={{width:"100%"}}>
               <thead>
                 <tr>
                   <th>Member</th>
                   <th>Team</th>
-                  <th className="sort-btn" onClick={()=>toggleSort("hours")}>Hours MTD {sortIcon("hours")}</th>
-                  <th className="sort-btn" onClick={()=>toggleSort("nights")}>Night Shifts {sortIcon("nights")}</th>
-                  <th className="sort-btn" onClick={()=>toggleSort("weekends")}>Weekends {sortIcon("weekends")}</th>
+                  <th className="sort-btn" onClick={()=>toggleSort("hours")}>Hours vs Target (160h) {sortIcon("hours")}</th>
+                  <th>Shift Breakdown (A / B / C / Other)</th>
+                  <th className="sort-btn" onClick={()=>toggleSort("wfhPercent")}>WFH % {sortIcon("wfhPercent")}</th>
+                  <th className="sort-btn" onClick={()=>toggleSort("maxConsWknds")}>Consecutive Wknds {sortIcon("maxConsWknds")}</th>
+                  <th className="sort-btn" onClick={()=>toggleSort("maxConsecutive")}>Max Streak {sortIcon("maxConsecutive")}</th>
                   <th className="sort-btn" onClick={()=>toggleSort("leaves")}>Leaves {sortIcon("leaves")}</th>
                 </tr>
               </thead>
               <tbody>
                 {sorted.map(m => {
                   const team = TEAM_CONFIG[m.team];
+                  // Hours Target Logic
+                  const targetRatio = Math.min((m.hours / 160) * 100, 100);
+                  const hrColor = m.hours > 175 ? COLORS.danger : m.hours < 140 ? COLORS.statusLeave : COLORS.success;
+                  
                   return (
                     <tr key={m.name}>
-                      <td style={{color:COLORS.offWhite}}>{m.name}</td>
+                      <td style={{color:COLORS.offWhite, fontWeight: 500}}>{m.name}</td>
                       <td style={{color:team?.color,fontSize:10}}>{m.team}</td>
-                      <td style={{color: m.hours > 180 ? COLORS.danger : COLORS.offWhite}}>{m.hours}h</td>
-                      <td style={{color: m.nights > 8 ? COLORS.shiftC : COLORS.offWhite}}>{m.nights}</td>
-                      <td style={{color: m.weekends > 2 ? COLORS.statusWeekend : COLORS.offWhite}}>{m.weekends}</td>
+                      
+                      {/* Metric 5: Hours Scheduled vs. Contracted Target */}
+                      <td style={{width: 180}}>
+                        <div style={{display:"flex", alignItems:"center", gap: 8}}>
+                          <span style={{color: hrColor, width: 40, textAlign:"right"}}>{m.hours}h</span>
+                          <div style={{flex:1, height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow:"hidden"}}>
+                            <div style={{width: `${targetRatio}%`, height: "100%", background: hrColor}} />
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Metric 1: Shift Type Distribution */}
+                      <td>
+                        <div style={{display:"flex", gap: 4}}>
+                          <span style={{background:SHIFT_COLORS["CSIRT-A"].bg, color:SHIFT_COLORS["CSIRT-A"].text, padding:"2px 5px", borderRadius:3, fontSize:9}}>{m.shiftA} A</span>
+                          <span style={{background:SHIFT_COLORS["CSIRT-B"].bg, color:SHIFT_COLORS["CSIRT-B"].text, padding:"2px 5px", borderRadius:3, fontSize:9}}>{m.shiftB} B</span>
+                          <span style={{background:SHIFT_COLORS["CSIRT-C"].bg, color:SHIFT_COLORS["CSIRT-C"].text, padding:"2px 5px", borderRadius:3, fontSize:9, fontWeight:m.nights>0?700:400}}>{m.nights} C</span>
+                          <span style={{background:"rgba(255,255,255,0.05)", color:COLORS.muted, padding:"2px 5px", borderRadius:3, fontSize:9}}>{m.shiftCustom} Oth</span>
+                        </div>
+                      </td>
+
+                      {/* Metric 3: WFH Equity */}
+                      <td style={{color: m.wfhPercent > 50 ? COLORS.statusWFH : COLORS.offWhite}}>{m.wfhPercent}%</td>
+                      
+                      {/* Metric 4: Weekend Burden Score */}
+                      <td style={{color: m.maxConsWknds > 1 ? COLORS.danger : COLORS.offWhite}}>
+                        {m.maxConsWknds > 1 ? `⚠ ${m.maxConsWknds} wks` : m.maxConsWknds}
+                      </td>
+
+                      {/* Metric 6: Consecutive Days Worked Warning */}
+                      <td style={{color: m.maxConsecutive > 6 ? COLORS.danger : COLORS.offWhite}}>
+                        {m.maxConsecutive > 6 ? `🔥 ${m.maxConsecutive} days` : `${m.maxConsecutive} days`}
+                      </td>
+                      
                       <td style={{color: m.leaves > 0 ? COLORS.statusLeave : COLORS.muted}}>{m.leaves}</td>
                     </tr>
                   );
@@ -2707,27 +2874,32 @@ function MetricsTab({ schedule, currentYear, currentMonth }) {
           </div>
         </div>
 
-        {/* Weekend Distribution */}
+        {/* ── CARD: Weekend Burden Highlights ── */}
         <div className="metric-card">
-          <div className="metric-title"><div style={{width:8,height:8,borderRadius:"50%",background:COLORS.statusWeekend}}/>Weekend Frequency</div>
-          {memberStats.sort((a,b)=>b.weekends-a.weekends).slice(0,10).map(m => {
-            const max = Math.max(...memberStats.map(x=>x.weekends), 1);
-            const team = TEAM_CONFIG[m.team];
-            return (
-              <div key={m.name} className="eq-row">
-                <div className="eq-name" title={m.name} style={{color:team?.color}}>{m.name.split(" ")[0]}</div>
-                <div className="eq-bar-wrap">
-                  <div className="eq-bar" style={{width:`${(m.weekends/max)*100}%`, background: m.weekends > 2 ? COLORS.statusWeekend : COLORS.accent}} />
+          <div className="metric-title"><div style={{width:8,height:8,borderRadius:"50%",background:COLORS.statusWeekend}}/>Consecutive Weekend Burden</div>
+          <div style={{fontSize:10, color:COLORS.muted, marginBottom:12}}>Members working multiple weekends in a row</div>
+          {weekendRisks.length === 0 ? (
+            <div style={{fontSize: 11, color: COLORS.success}}>✓ No consecutive weekend risks detected.</div>
+          ) : (
+            weekendRisks.sort((a,b)=>b.maxConsWknds-a.maxConsWknds).map(m => {
+              const team = TEAM_CONFIG[m.team];
+              return (
+                <div key={m.name} className="eq-row">
+                  <div className="eq-name" title={m.name} style={{color:team?.color}}>{m.name.split(" ")[0]}</div>
+                  <div className="eq-bar-wrap" style={{background: "rgba(255,255,255,0.05)"}}>
+                    <div className="eq-bar" style={{width:`${(m.maxConsWknds/4)*100}%`, background: m.maxConsWknds > 2 ? COLORS.danger : COLORS.statusWeekend}} />
+                  </div>
+                  <div className="eq-val" style={{color: m.maxConsWknds > 2 ? COLORS.danger : COLORS.statusWeekend}}>{m.maxConsWknds} in a row</div>
                 </div>
-                <div className="eq-val" style={{color: m.weekends > 2 ? COLORS.statusWeekend : COLORS.muted}}>{m.weekends}</div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
-        {/* Lead Coverage */}
+        {/* ── CARD: Lead Coverage Overview ── */}
         <div className="metric-card">
           <div className="metric-title"><div style={{width:8,height:8,borderRadius:"50%",background:COLORS.accent}}/>Lead Coverage Overview</div>
+          <div style={{fontSize:10, color:COLORS.muted, marginBottom:12}}>Today's team staffing levels vs Lead presence</div>
           {Object.entries(TEAM_CONFIG).map(([teamKey, team]) => {
             const leadName = team.lead;
             const today = new Date().getDate();
@@ -2759,11 +2931,6 @@ function MetricsTab({ schedule, currentYear, currentMonth }) {
     </>
   );
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// AUDIT LOG TAB
-// ════════════════════════════════════════════════════════════════════════════
-
 function AuditTab({ auditLogs }) {
   if (!auditLogs.length) {
     return <div className="no-data">No audit log entries yet. Changes made via the calendar will appear here.</div>;
