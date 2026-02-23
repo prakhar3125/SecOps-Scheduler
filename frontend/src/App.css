@@ -1,0 +1,27 @@
+.app {
+  min-height: 100vh;
+  background: var(--navy);
+  font-family: 'DM Mono', monospace;
+  color: var(--white);
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden; /* Prevents the whole page from stretching horizontally */
+  /* align-items: center; <-- REMOVED this */
+}
+
+.main {
+  width: 100%;
+  max-width: 1800px;
+  margin: 0 auto; /* ADDED this to center the content cleanly */
+  padding: 22px 28px;
+  box-sizing: border-box;
+}
+
+.tl-wrap {
+  background: var(--navy-l);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  overflow-x: auto; /* ADDED this so the timeline scrolls safely on narrow screens */
+}
