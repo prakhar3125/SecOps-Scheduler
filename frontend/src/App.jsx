@@ -2206,110 +2206,169 @@ function CalendarTab({ schedule, currentYear, currentMonth, onEditCell, currentU
 // TIMELINE TAB
 // ════════════════════════════════════════════════════════════════════════════
 
-function TimelineTab({ schedule, currentYear, currentMonth }) {
-  const today = currentYear === new Date().getFullYear() && currentMonth === new Date().getMonth()
+function TimelineTab({ schedule, currentYear, currentMonth, allSchedules }) {
+  // Use state to track the currently viewed day in the timeline
+  const todayActual = currentYear === new Date().getFullYear() && currentMonth === new Date().getMonth()
     ? new Date().getDate() : 1;
-  const yesterday = today > 1 ? today - 1 : null; 
-  const nowH = new Date().getHours() + new Date().getMinutes()/60;
-  const hours = Array.from({length:25},(_,i)=>i);
+  const [timelineDay, setTimelineDay] = useState(todayActual);
+
+  // Reset to the valid 'today' or the 1st if the month changes from the main header
+  useEffect(() => {
+    const defaultDay = currentYear === new Date().getFullYear() && currentMonth === new Date().getMonth()
+      ? new Date().getDate() : 1;
+    setTimelineDay(defaultDay);
+  }, [currentYear, currentMonth]);
+
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+
+  // Navigation handlers
+  const canPrev = timelineDay > 1;
+  const canNext = timelineDay < daysInMonth;
+
+  const handlePrevDay = () => setTimelineDay(d => Math.max(1, d - 1));
+  const handleNextDay = () => setTimelineDay(d => Math.min(daysInMonth, d + 1));
+  const jumpToToday = () => setTimelineDay(todayActual);
+
+  // Determine "yesterday" logic, including month boundary logic for carry-overs
+  let yesterday = null;
+  let prevMonthSchedule = null;
+
+  if (timelineDay > 1) {
+    yesterday = timelineDay - 1;
+    prevMonthSchedule = schedule; // Yesterday is in the same month
+  } else {
+    // If we are on day 1, "yesterday" is the last day of the previous month
+    let prevM = currentMonth - 1;
+    let prevY = currentYear;
+    if (prevM < 0) {
+      prevM = 11;
+      prevY -= 1;
+    }
+    const prevKey = `${prevY}-${prevM}`;
+    if (allSchedules && allSchedules[prevKey]) {
+      yesterday = getDaysInMonth(prevY, prevM);
+      prevMonthSchedule = allSchedules[prevKey];
+    }
+  }
+
+  const nowH = new Date().getHours() + new Date().getMinutes() / 60;
+  const hours = Array.from({ length: 25 }, (_, i) => i);
 
   function barStyle(startH, endH) {
     const left = (startH / 24) * 100;
     const width = ((endH - startH) / 24) * 100;
-    return { left:`${left}%`, width:`${width}%` };
+    return { left: `${left}%`, width: `${width}%` };
   }
 
   function isOvernight(shift) {
     const s = timeToHours(shift.start);
     const e = timeToHours(shift.end);
-    return e < s; 
+    return e < s;
   }
+
+  const isViewingToday = timelineDay === new Date().getDate() && 
+                         currentMonth === new Date().getMonth() && 
+                         currentYear === new Date().getFullYear();
 
   return (
     <div className="tl-wrap">
-      <div style={{fontFamily:"'Exo 2',sans-serif",fontWeight:700,fontSize:14,marginBottom:4}}>
-        24h Coverage Timeline — Day {today}
+      {/* View Range / Navigation Header */}
+      <div className="range-bar" style={{ marginBottom: 20, border: 'none', background: 'transparent', padding: 0 }}>
+        <div style={{ fontFamily: "'Exo 2',sans-serif", fontWeight: 700, fontSize: 16 }}>
+          24h Coverage Timeline
+        </div>
+        
+        <div className="week-nav" style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="week-nav-btn" onClick={handlePrevDay} disabled={!canPrev} title="Previous Day">‹</button>
+          <span className="week-range-label" style={{ minWidth: 140, fontWeight: 600 }}>
+             {new Date(currentYear, currentMonth, timelineDay).toLocaleDateString("en-US", { weekday:"short", month:"short", day:"numeric", year:"numeric" })}
+          </span>
+          <button className="week-nav-btn" onClick={handleNextDay} disabled={!canNext} title="Next Day">›</button>
+          
+          {todayActual > 0 && !isViewingToday && (
+            <button className="range-today-btn" style={{ marginLeft: 8 }} onClick={jumpToToday}>↩ Today</button>
+          )}
+        </div>
       </div>
-      <div style={{fontSize:10,color:COLORS.muted,marginBottom:14}}>
-        Overnight shifts from Day {yesterday ?? "—"} are shown faded (00:00 → end time) for handover context.
+
+      <div style={{ fontSize: 10, color: COLORS.muted, marginBottom: 14 }}>
+        Overnight shifts from the previous day are shown faded (00:00 → end time) for handover context.
       </div>
+      
       <div className="tl-hours">
-        {hours.map(h=>(
+        {hours.map(h => (
           <div key={h} className="tl-hour">
-            {h===0?"12am":h<12?`${h}am`:h===12?"12pm":`${h-12}pm`}
+            {h === 0 ? "12am" : h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`}
           </div>
         ))}
       </div>
+      
       {Object.entries(TEAM_CONFIG).map(([teamKey, team]) => {
         const active = team.members.filter(m => {
-          const d = schedule[m]?.[today];
+          const d = schedule[m]?.[timelineDay];
           return d && d.modifier !== "Off" && d.modifier !== "Paid Leave" && d.shift;
         });
 
-        // ── NEW SORTING LOGIC: Groups members by shift start time ──
         const sortedMembers = [...team.members].sort((a, b) => {
           const getStartScore = (member) => {
-            const td = schedule[member]?.[today];
-            const yd = yesterday ? schedule[member]?.[yesterday] : null;
+            const td = schedule[member]?.[timelineDay];
+            const yd = yesterday && prevMonthSchedule ? prevMonthSchedule[member]?.[yesterday] : null;
             const isActive = td?.shift && !["Off", "Paid Leave"].includes(td.modifier);
             const hasCarry = yd?.shift && !["Off", "Paid Leave"].includes(yd.modifier) && isOvernight(yd.shift);
-            
+
             if (isActive) return timeToHours(td.shift.start);
-            if (hasCarry) return 0; // Carry-overs lock to the top (00:00 start)
-            return 999; // Off today
+            if (hasCarry) return 0;
+            return 999;
           };
 
           const scoreA = getStartScore(a);
           const scoreB = getStartScore(b);
           if (scoreA !== scoreB) return scoreA - scoreB;
-          return a.localeCompare(b); // Tie-breaker: alphabetical
+          return a.localeCompare(b);
         });
 
         return (
           <div key={teamKey}>
-            <div className="tl-group-lbl" style={{color:COLORS.accent}}>
+            <div className="tl-group-lbl" style={{ color: COLORS.accent }}>
               {team.label} — {active.length}/{team.members.length} active
             </div>
 
-            {/* Handover windows */}
             {team.handoverWindows.map((hw, hi) => (
-              <div key={hi} style={{fontSize:10,color:COLORS.mutedLight,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
-                <span style={{width:170,flexShrink:0}}/>
-                <div style={{flex:1,position:"relative",height:12}}>
+              <div key={hi} style={{ fontSize: 10, color: COLORS.mutedLight, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 170, flexShrink: 0 }} />
+                <div style={{ flex: 1, position: "relative", height: 12 }}>
                   <div style={{
-                    position:"absolute",
-                    left:`${(hw.start/24)*100}%`,
-                    width:`${((hw.end-hw.start)/24)*100}%`,
-                    top:0,bottom:0,
-                    background:"rgba(122,143,166,0.07)",
-                    borderLeft:"1px dashed rgba(122,143,166,0.4)",
-                    display:"flex",alignItems:"center",paddingLeft:4,
-                    fontSize:9,color:COLORS.muted,
+                    position: "absolute",
+                    left: `${(hw.start / 24) * 100}%`,
+                    width: `${((hw.end - hw.start) / 24) * 100}%`,
+                    top: 0, bottom: 0,
+                    background: "rgba(122,143,166,0.07)",
+                    borderLeft: "1px dashed rgba(122,143,166,0.4)",
+                    display: "flex", alignItems: "center", paddingLeft: 4,
+                    fontSize: 9, color: COLORS.muted,
                   }}>{hw.label}</div>
                 </div>
               </div>
             ))}
 
-            {/* Replaced team.members with sortedMembers */}
             {sortedMembers.map(member => {
-              const todayData = schedule[member]?.[today];
-              const yestData  = yesterday ? schedule[member]?.[yesterday] : null;
+              const todayData = schedule[member]?.[timelineDay];
+              const yestData = yesterday && prevMonthSchedule ? prevMonthSchedule[member]?.[yesterday] : null;
 
               const rows = [];
 
-              // ── YESTERDAY'S OVERNIGHT CARRY-OVER ──────────────────────────
-              if (yestData?.shift && !["Off","Paid Leave"].includes(yestData.modifier) && isOvernight(yestData.shift)) {
+              if (yestData?.shift && !["Off", "Paid Leave"].includes(yestData.modifier) && isOvernight(yestData.shift)) {
                 const shift = yestData.shift;
-                const endH  = timeToHours(shift.end); 
+                const endH = timeToHours(shift.end);
                 const colorKey = getShiftColorKey(teamKey, shift.id, shift.isCustom);
                 const sc = SHIFT_COLORS[colorKey];
                 const barCol = yestData.modifier === "WFH" ? COLORS.statusWFH
-                             : yestData.modifier === "Weekend Scheduled" ? COLORS.statusWeekend
-                             : sc.text;
+                  : yestData.modifier === "Weekend Scheduled" ? COLORS.statusWeekend
+                    : sc.text;
                 rows.push(
                   <div key={`${member}-yest`} className="tl-row">
-                    <div className="tl-label" title={`${member} (from prev day)`} style={{opacity:0.55}}>
-                      {member.split(" ")[0]} {member.split(" ")[1]?.[0]}. <span style={{fontSize:8}}>↩</span>
+                    <div className="tl-label" title={`${member} (from prev day)`} style={{ opacity: 0.55 }}>
+                      {member.split(" ")[0]} {member.split(" ")[1]?.[0]}. <span style={{ fontSize: 8 }}>↩</span>
                     </div>
                     <div className="tl-bar-wrap">
                       <div className="tl-bar" style={{
@@ -2322,25 +2381,24 @@ function TimelineTab({ schedule, currentYear, currentMonth }) {
                       }}>
                         {shift.id} carry-over → {shift.end}
                       </div>
-                      <div className="tl-now" style={{left:`${(nowH/24)*100}%`}}/>
+                      {isViewingToday && <div className="tl-now" style={{ left: `${(nowH / 24) * 100}%` }} />}
                     </div>
                   </div>
                 );
               }
 
-              // ── TODAY'S SHIFT ──────────────────────────────────────────────
-              if (todayData?.shift && !["Off","Paid Leave"].includes(todayData.modifier)) {
+              if (todayData?.shift && !["Off", "Paid Leave"].includes(todayData.modifier)) {
                 const shift = todayData.shift;
                 const startH = timeToHours(shift.start);
-                const endH   = timeToHours(shift.end);
-                
+                const endH = timeToHours(shift.end);
+
                 const overnight = isOvernight(shift);
                 const displayEnd = overnight ? 24 : endH;
                 const colorKey = getShiftColorKey(teamKey, shift.id, shift.isCustom);
                 const sc = SHIFT_COLORS[colorKey];
                 const barCol = todayData.modifier === "WFH" ? COLORS.statusWFH
-                             : todayData.modifier === "Weekend Scheduled" ? COLORS.statusWeekend
-                             : sc.text;
+                  : todayData.modifier === "Weekend Scheduled" ? COLORS.statusWeekend
+                    : sc.text;
                 rows.push(
                   <div key={`${member}-today`} className="tl-row">
                     <div className="tl-label" title={member}>
@@ -2357,7 +2415,7 @@ function TimelineTab({ schedule, currentYear, currentMonth }) {
                         {overnight ? " →" : ""}
                         {todayData.modifier === "WFH" ? " (WFH)" : ""}
                       </div>
-                      <div className="tl-now" style={{left:`${(nowH/24)*100}%`}}/>
+                      {isViewingToday && <div className="tl-now" style={{ left: `${(nowH / 24) * 100}%` }} />}
                     </div>
                   </div>
                 );
@@ -2368,10 +2426,10 @@ function TimelineTab({ schedule, currentYear, currentMonth }) {
           </div>
         );
       })}
-      <div style={{marginTop:16,fontSize:10,color:COLORS.muted,display:"flex",gap:16,flexWrap:"wrap"}}>
-        <span style={{color:COLORS.accent}}>│ Current time</span>
-        <span style={{color:COLORS.muted}}>⋯ Handover windows</span>
-        <span style={{color:COLORS.muted,fontStyle:"italic"}}>↩ dashed = overnight carry-over from prev day</span>
+      <div style={{ marginTop: 16, fontSize: 10, color: COLORS.muted, display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {isViewingToday && <span style={{ color: COLORS.accent }}>│ Current time</span>}
+        <span style={{ color: COLORS.muted }}>⋯ Handover windows</span>
+        <span style={{ color: COLORS.muted, fontStyle: "italic" }}>↩ dashed = overnight carry-over from prev day</span>
       </div>
     </div>
   );
@@ -2861,8 +2919,7 @@ export default function App() {
         <main className="main">
           {tab === "overview" && <OverviewTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} currentUser={currentUser} />}
           {tab === "calendar" && <CalendarTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} onEditCell={setEditCell} currentUser={currentUser} />}
-          {tab === "timeline" && <TimelineTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} />}
-          {tab === "metrics" && <MetricsTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} />}
+{tab === "timeline" && <TimelineTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} allSchedules={allSchedules} />}          {tab === "metrics" && <MetricsTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} />}
           {tab === "admin" && currentUser.role !== ROLES.MEMBER && <AdminTab schedule={schedule} currentYear={currentYear} currentMonth={currentMonth} addAuditLog={addAuditLog} currentUser={currentUser} />}
           {tab === "audit" && <AuditTab auditLogs={auditLogs} />}
         </main>
